@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Список покупок</title>
+<style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f8f8f8;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+        }
+        form {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #shareLink {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        #copyMsg {
+            color: green;
+            font-size: 0.9em;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            background: white;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-name {
+            flex: 1;
+        }
+        .item-actions form {
+            display: inline;
+        }
+        .item-actions button {
+            background: none;
+            border: none;
+            font-size: 16px;
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        .item-actions button:hover {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🛒 Список покупок</h1>
+
+
+    <form id="addItemForm">
+        <input type="text" id="itemInput" placeholder="Новый товар..." required>
+        <button type="submit">Добавить</button>
+    </form>
+
+
+    <div class="link-share">
+        <input id="shareLink" type="text" value="{{ request.build_absolute_uri }}" readonly>
+        <button onclick="copyLink()">Скопировать ссылку</button>
+        <span id="copyMsg" style="display:none;">Скопировано!</span>
+    </div>
+
+    <ul id="item-list">
+        {% for item in items %}
+            <li data-id="{{ item.id }}">
+                <span class="item-name">{{ item.name }}{% if item.is_bought %} (куплено){% endif %}</span>
+                <div class="item-actions">
+                    <form method="post" action="{% url 'toggle_item' item.id %}">{% csrf_token %}
+                        <button title="Отметить купленным">✓</button>
+                    </form>
+                    <form method="post" action="{% url 'delete_item' item.id %}">{% csrf_token %}
+                        <button title="Удалить">🗑️</button>
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+
+</div>
+
+
+<script>
+    const roomName = "{{ list_uuid }}";
+    const socket = new WebSocket(
+        'ws://' + window.location.host + '/ws/shopping/' + roomName + '/'
+    );
+
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        const action = data['action'];
+        const itemId = data['item_id'];  
+        const itemName = data['item_name']; 
+
+        if (action === 'add') {
+            addItemToList(itemId, itemName, false); 
+        } else if (action === 'toggle') {
+            toggleItemState(itemId);  
+        } else if (action === 'delete') {
+            deleteItemFromList(itemId);  
+        }
+    };
+
+
+    function addItemToList(itemId, itemName, isBought) {
+        const li = document.createElement('li');
+        li.setAttribute('data-id', itemId); 
+
+        const span = document.createElement('span');
+        span.className = 'item-name';
+        span.textContent = itemName + (isBought ? ' (куплено)' : '');
+
+        const actions = document.createElement('div');
+        actions.className = 'item-actions';
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.title = "Отметить купленным";
+        toggleBtn.textContent = "✓";
+        toggleBtn.onclick = () => sendMessage('toggle', itemId); 
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.title = "Удалить";
+        deleteBtn.textContent = "🗑️";
+        deleteBtn.onclick = () => sendMessage('delete', itemId);  
+
+        actions.appendChild(toggleBtn);
+        actions.appendChild(deleteBtn);
+
+        li.appendChild(span);
+        li.appendChild(actions);
+        document.getElementById('item-list').prepend(li);
+    }
+
+
+    function toggleItemState(itemId) {
+        const li = document.querySelector(`li[data-id='${itemId}']`);
+        if (li) {
+            const span = li.querySelector('.item-name');
+            if (span.textContent.includes('(куплено)')) {
+                span.textContent = span.textContent.replace(' (куплено)', '');  
+            } else {
+                span.textContent += ' (куплено)';  
+            }
+        }
+    }
+
+
+    function deleteItemFromList(itemId) {
+        const li = document.querySelector(`li[data-id='${itemId}']`);
+        if (li) li.remove();
+    }
+
+
+    
+    function sendMessage(action, itemId, itemName = '') {
+        socket.send(JSON.stringify({
+            'action': action,
+            'item_id': itemId,
+            'item_name': itemName
+        }));
+    }
+
+    document.getElementById('addItemForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const input = document.getElementById('itemInput');
+        const itemName = input.value.trim();
+        if (itemName !== '') {
+            sendMessage('add', null, itemName);  
+            input.value = '';
+        }
+    });
+
+    function copyLink() {
+    const link = document.getElementById('shareLink');
+    link.select();
+    link.setSelectionRange(0, 99999); 
+    document.execCommand('copy');
+    
+
+    const copyMsg = document.getElementById('copyMsg');
+    copyMsg.style.display = 'inline';
+    setTimeout(() => {
+        copyMsg.style.display = 'none';
+    }, 2000);
+}
+
+</script>
+
+
+</body>
+</html>
