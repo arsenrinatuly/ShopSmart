@@ -23,9 +23,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-4v@#)9!$@&*0g3j1b2z5q6r7h8j9k0l1m2n3o4p5q6r7s8t9u")
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "False") == "True"    
-
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
+DEBUG = True
+ALLOWED_HOSTS = ['127.0.0.1']
 
 
 # Application definition
